@@ -1,42 +1,42 @@
 """Configuración central: URLs, IDs de modelos y valores por defecto."""
 
-# --- NVIDIA build.nvidia.com ---
-NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-COSMOS_URL = "https://ai.api.nvidia.com/v1/cosmos/nvidia/cosmos3-nano"
-NVCF_STATUS_URL = "https://api.nvcf.nvidia.com/v2/nvcf/pexec/status/{reqid}"
+# --- Alibaba Cloud Model Studio (DashScope, región internacional Singapur) ---
+CHAT_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+MULTIMODAL_URL = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
-# --- Modelos ---
+# --- Modelos (verificados con llamadas reales el 2026-11-12) ---
 # Modelo de texto (receta y pasos). Editable desde la barra lateral.
-# TODO: verifica en build.nvidia.com el ID exacto vigente (puede requerir prefijo
-# de organización, p. ej. "deepseek-ai/...").
-TEXT_MODEL_ID = "deepseek-v4.1-flash"
-
-# Modelo de visión (DeepSeek es solo texto y no puede analizar imágenes).
-# TODO: verifica en build.nvidia.com que el ID siga disponible.
-VISION_MODEL_ID = "meta/llama-3.2-90b-vision-instruct"
-VISION_MODEL_OPTIONS = [
-    "meta/llama-3.2-90b-vision-instruct",
-    "meta/llama-3.2-11b-vision-instruct",
+TEXT_MODEL_ID = "deepseek-v4-pro-0813"
+TEXT_MODEL_OPTIONS = [
+    "deepseek-v4-pro-0813",
+    "deepseek-v4-flash-0731",
+    "qwen3.8-flash",
 ]
 
-# --- Parámetros por defecto de Cosmos3-nano (según el ejemplo oficial) ---
-COSMOS_MODEL_MODE = "text2video"
-COSMOS_DEFAULTS = {
-    "resolution": "480_16_9",
-    "num_frames": 25,
-    "num_inference_steps": 35,
-    "fps": 24,
-    "seed": 42,
-}
-COSMOS_RESOLUTIONS = ["480_16_9", "480_9_16", "480_1_1"]  # TODO: verificar opciones vigentes
+# Modelo de visión (detección de ingredientes en la foto).
+VISION_MODEL_ID = "qwen3-vl-plus"
+VISION_MODEL_OPTIONS = [
+    "qwen3-vl-plus",
+    "qwen3.8-omni-flash",
+]
+
+# Modelo de generación de imágenes (imagen del plato).
+IMAGE_MODEL_ID = "qwen-image-3.0-pro"
+IMAGE_MODEL_OPTIONS = [
+    "qwen-image-3.0-pro",
+    "qwen-image-3.0",
+    "z-image-turbo",
+]
+
+# --- Parámetros por defecto de generación de imágenes ---
+IMAGE_SIZE_DEFAULT = "1024*1024"
+IMAGE_SIZE_OPTIONS = ["1024*1024", "1280*720", "720*1280"]
 
 # --- Red ---
 HTTP_TIMEOUT_S = 120
 HTTP_MAX_RETRIES = 3
 BACKOFF_BASE_S = 2.0
-POLL_INTERVAL_S = 3.0
-POLL_MAX_INTERVAL_S = 10.0
-POLL_TIMEOUT_S = 600  # tiempo máximo esperando a Cosmos
+IMAGE_TIMEOUT_S = 300  # La generación de imágenes puede tardar más que el texto
 
 # --- Generación de texto ---
 LLM_TEMPERATURE_VISION = 0.1

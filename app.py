@@ -8,7 +8,7 @@ import streamlit as st
 import config
 import image_service
 import image_utils
-import nvidia_client
+import model_studio_client
 import recipe_service
 import ui_components
 import vision_service
@@ -27,11 +27,11 @@ def _secret(name: str) -> str:
 
 
 def _friendly(exc: Exception) -> str:
-    if isinstance(exc, nvidia_client.AuthError):
+    if isinstance(exc, model_studio_client.AuthError):
         return "🔑 La clave de API es inválida o no tiene permisos."
-    if isinstance(exc, nvidia_client.RateLimitError):
+    if isinstance(exc, model_studio_client.RateLimitError):
         return "⏳ Límite de solicitudes alcanzado. Espera un momento e intenta de nuevo."
-    if isinstance(exc, (nvidia_client.NvidiaAPIError, image_utils.InvalidImageError, ValueError)):
+    if isinstance(exc, (model_studio_client.ModelStudioError, image_utils.InvalidImageError, ValueError)):
         return f"⚠️ {exc}"
     return "⚠️ Ocurrió un error inesperado. Intenta de nuevo."
 
@@ -39,26 +39,26 @@ def _friendly(exc: Exception) -> str:
 # ---------------- Sidebar ----------------
 with st.sidebar:
     st.header("⚙️ Configuración")
-    llm_key = st.text_input("API key NVIDIA (LLM)", type="password", key="llm_key",
-                            value=_secret("NVIDIA_API_KEY"), help="Formato nvapi-… de build.nvidia.com")
-    same_key = st.checkbox("Usar la misma clave para imágenes", value=True, key="same_key")
-    cosmos_key = llm_key if same_key else st.text_input(
-        "API key Cosmos (imágenes)", type="password", key="cosmos_key", value=_secret("COSMOS_API_KEY"))
+    llm_key = st.text_input("API key Model Studio", type="password", key="llm_key",
+                            value=_secret("DASHSCOPE_API_KEY"),
+                            help="Clave de Alibaba Cloud Model Studio (formato sk-…)")
 
     st.subheader("Modelos")
-    text_model = st.text_input("Modelo de texto", value=config.TEXT_MODEL_ID)
-    vision_model = st.selectbox("Modelo de visión", config.VISION_MODEL_OPTIONS + ["Otro…"])
+    text_model = st.selectbox("Modelo de texto (receta)", config.TEXT_MODEL_OPTIONS + ["Otro…"],
+                              help="Genera la receta y el paso a paso.")
+    if text_model == "Otro…":
+        text_model = st.text_input("ID del modelo de texto", value=config.TEXT_MODEL_ID)
+    vision_model = st.selectbox("Modelo de visión (ingredientes)", config.VISION_MODEL_OPTIONS + ["Otro…"])
     if vision_model == "Otro…":
         vision_model = st.text_input("ID del modelo de visión", value=config.VISION_MODEL_ID)
+    image_model = st.selectbox("Modelo de imagen (plato)", config.IMAGE_MODEL_OPTIONS + ["Otro…"],
+                               help="Genera la imagen del plato final.")
+    if image_model == "Otro…":
+        image_model = st.text_input("ID del modelo de imagen", value=config.IMAGE_MODEL_ID)
 
-    with st.expander("Cosmos3-nano (avanzado)"):
-        d = config.COSMOS_DEFAULTS
-        resolution = st.selectbox("Resolución", config.COSMOS_RESOLUTIONS)
-        num_frames = st.number_input("Fotogramas", 1, 200, d["num_frames"])
-        steps = st.number_input("Pasos de inferencia", 1, 100, d["num_inference_steps"])
-        fps = st.number_input("FPS", 1, 60, d["fps"])
-        seed = st.number_input("Semilla", 0, 2**31 - 1, d["seed"])
-        poll_timeout = st.number_input("Espera máxima (s)", 30, 1800, config.POLL_TIMEOUT_S)
+    with st.expander("Imagen del plato (avanzado)"):
+        image_size = st.selectbox("Tamaño", config.IMAGE_SIZE_OPTIONS)
+        prompt_extend = st.checkbox("Ampliar el prompt automáticamente", value=True)
 
 # ---------------- Estado ----------------
 for key, default in (("ingredients", None), ("recipe", None), ("media", None), ("media_error", "")):
@@ -124,16 +124,11 @@ if st.session_state.ingredients is not None:
                 with st.status("Creando tu receta…", expanded=True) as status:
                     st.write("Generando receta y pasos…")
                     st.session_state.recipe = recipe_service.generate_recipe(names, llm_key, text_model)
-                    st.write("Generando imagen del plato (puede tardar)…")
-                    holder = st.empty()
+                    st.write("Generando imagen del plato…")
                     try:
-                        if not cosmos_key:
-                            raise nvidia_client.AuthError("Falta la clave de Cosmos.")
-                        st.session_state.media = image_service.generate_dish_media(
-                            st.session_state.recipe, cosmos_key,
-                            params={"resolution": resolution, "num_frames": int(num_frames),
-                                    "num_inference_steps": int(steps), "fps": int(fps), "seed": int(seed)},
-                            poll_timeout=int(poll_timeout), on_progress=holder.write,
+                        st.session_state.media = image_service.generate_dish_image(
+                            st.session_state.recipe, llm_key, model=image_model,
+                            size=image_size, prompt_extend=prompt_extend,
                         )
                     except Exception as exc:  # noqa: BLE001 - la receta se muestra igual
                         st.session_state.media_error = _friendly(exc)
@@ -149,9 +144,7 @@ if recipe:
     with col_img:
         media = st.session_state.media
         if media:
-            st.image(media.frame_png, caption=f"Así podría verse: {recipe.name}", use_container_width=True)
-            with st.expander("🎬 Ver video completo"):
-                st.video(media.video_mp4)
+            st.image(media.image_bytes, caption=f"Así podría verse: {recipe.name}", use_container_width=True)
         else:
             st.warning(st.session_state.media_error or "No se pudo generar la imagen del plato.")
     with col_info:

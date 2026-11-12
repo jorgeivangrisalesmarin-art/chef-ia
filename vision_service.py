@@ -1,4 +1,4 @@
-"""Detección de ingredientes a partir de una imagen usando un VLM de NVIDIA."""
+"""Detección de ingredientes a partir de una imagen usando un VLM de Model Studio."""
 from __future__ import annotations
 
 import logging
@@ -6,7 +6,7 @@ import logging
 import config
 import image_utils
 import json_utils
-import nvidia_client
+import model_studio_client
 import prompts
 from models import Ingredient
 
@@ -23,13 +23,13 @@ def detect_ingredients(image_bytes: bytes, api_key: str, model: str = config.VIS
             {"type": "image_url", "image_url": {"url": data_uri}},
         ]},
     ]
-    text = nvidia_client.chat_completion(
+    text = model_studio_client.chat_completion(
         api_key, model, messages, config.LLM_TEMPERATURE_VISION, config.LLM_MAX_TOKENS_VISION
     )
     try:
         parsed = json_utils.extract_json(text)
     except ValueError as exc:
-        raise nvidia_client.NvidiaAPIError("No se pudo interpretar la respuesta de visión.") from exc
+        raise model_studio_client.ModelStudioError("No se pudo interpretar la respuesta de visión.") from exc
 
     raw = parsed.get("ingredientes", []) if isinstance(parsed, dict) else parsed
     seen: set[str] = set()

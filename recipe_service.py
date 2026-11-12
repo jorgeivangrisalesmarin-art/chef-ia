@@ -1,11 +1,11 @@
-"""Generación de la receta con deepseek-v4.1-flash (salida JSON validada)."""
+"""Generación de la receta con deepseek-v4-pro-0813 (salida JSON validada)."""
 from __future__ import annotations
 
 import logging
 
 import config
 import json_utils
-import nvidia_client
+import model_studio_client
 import prompts
 from models import Recipe
 
@@ -31,8 +31,9 @@ def generate_recipe(ingredients: list[str], api_key: str, model: str = config.TE
     ]
     last_error: Exception | None = None
     for attempt in range(config.LLM_JSON_RETRIES + 1):
-        text = nvidia_client.chat_completion(
-            api_key, model, messages, config.LLM_TEMPERATURE_RECIPE, config.LLM_MAX_TOKENS_RECIPE
+        text = model_studio_client.chat_completion(
+            api_key, model, messages, config.LLM_TEMPERATURE_RECIPE, config.LLM_MAX_TOKENS_RECIPE,
+            enable_thinking=False,
         )
         try:
             return parse_recipe_json(text)
@@ -43,4 +44,4 @@ def generate_recipe(ingredients: list[str], api_key: str, model: str = config.TE
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": prompts.RECIPE_RETRY.format(error=exc)},
             ]
-    raise nvidia_client.NvidiaAPIError(f"El modelo no devolvió una receta válida: {last_error}")
+    raise model_studio_client.ModelStudioError(f"El modelo no devolvió una receta válida: {last_error}")

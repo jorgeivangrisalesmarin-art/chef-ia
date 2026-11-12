@@ -2,6 +2,18 @@
 
 App web responsive en Python + Streamlit: foto o imagen de ingredientes → ingredientes detectados (editables) → receta → paso a paso → imagen del plato.
 
+## Proveedor de IA
+
+**Alibaba Cloud Model Studio** (DashScope, región internacional Singapur) — endpoint OpenAI-compatible para texto/visión y API multimodal para imágenes. Cada usuario aporta su propia API key (`sk-…`) en la barra lateral; no hay clave en el código.
+
+| Rol | Modelo por defecto | Alternativas en la barra lateral |
+|---|---|---|
+| Texto (receta y pasos) | `deepseek-v4-pro-0813` | `deepseek-v4-flash-0731`, `qwen3.8-flash` |
+| Visión (detección de ingredientes) | `qwen3-vl-plus` | `qwen3.8-omni-flash` |
+| Imagen del plato | `qwen-image-3.0-pro` | `qwen-image-3.0`, `z-image-turbo` |
+
+Todos los IDs se verificaron con llamadas reales el 2026-11-12 contra `dashscope-intl.aliyuncs.com`.
+
 ## Arquitectura
 
 | Archivo | Responsabilidad |
@@ -11,19 +23,19 @@ App web responsive en Python + Streamlit: foto o imagen de ingredientes → ingr
 | `models.py` | Dataclasses y validación de la receta |
 | `prompts.py` | Plantillas de prompts |
 | `json_utils.py` | Extracción de JSON de respuestas de LLM |
-| `nvidia_client.py` | HTTP con reintentos, errores tipados y polling (202) |
+| `model_studio_client.py` | HTTP con reintentos y errores tipados (chat + imágenes) |
 | `image_utils.py` | Validar, redimensionar y convertir imágenes |
-| `vision_service.py` | Detección de ingredientes (VLM) |
-| `recipe_service.py` | Receta con deepseek-v4.1-flash |
-| `image_service.py` | cosmos3-nano + extracción de fotograma |
+| `vision_service.py` | Detección de ingredientes (VLM `qwen3-vl-plus`) |
+| `recipe_service.py` | Receta con `deepseek-v4-pro-0813` |
+| `image_service.py` | Imagen del plato con `qwen-image-3.0-pro` |
 | `ui_components.py` | Componentes de render |
 
 ## Puntos importantes
 
-1. **DeepSeek es solo texto**: la detección de ingredientes usa un modelo de visión de build.nvidia.com (por defecto `meta/llama-3.2-90b-vision-instruct`, editable en la barra lateral).
-2. **Cosmos3-nano genera video**: se muestra el video y un fotograma central como "imagen del plato".
-3. **Verifica los IDs de modelo** en https://build.nvidia.com. Si `deepseek-v4.1-flash` responde 404, prueba con el prefijo de organización que muestre el catálogo (campo editable en la barra lateral, o `config.py`).
-4. Cosmos puede tardar minutos; la receta se muestra aunque falle la imagen.
+1. **Tres llamadas diferenciadas**: la receta usa el endpoint OpenAI-compatible (`/compatible-mode/v1/chat/completions`) con `enable_thinking: false` para respuesta inmediata; la detección de ingredientes usa el mismo endpoint con la imagen como data URI (`image_url`); la imagen del plato usa la API multimodal nativa (`/api/v1/services/aigc/multimodal-generation/generation`), que responde síncrona con una URL firmada de la imagen.
+2. **La URL de la imagen firmada expira en horas**: la app descarga los bytes inmediatamente y los guarda en `st.session_state`.
+3. Los IDs de modelos son editables desde la barra lateral (opción "Otro…") por si Model Studio retira o renombra alguno.
+4. Si falla la imagen, la receta se muestra igual.
 
 ## Ejecución local
 
@@ -39,7 +51,7 @@ pytest
 1. Sube el proyecto a un repositorio de GitHub.
 2. En https://share.streamlit.io crea una app: archivo principal `app.py`.
 3. En *Advanced settings* elige Python 3.11.
-4. (Opcional) En *Secrets* agrega `NVIDIA_API_KEY` y `COSMOS_API_KEY`. Si no, cada usuario ingresa su clave en la barra lateral.
+4. (Opcional) En *Secrets* agrega `DASHSCOPE_API_KEY = "sk-…"`. Si no, cada usuario ingresa su clave en la barra lateral.
 
 Las claves solo viven en `st.session_state`; no se guardan ni se registran.
 
@@ -47,3 +59,4 @@ Las claves solo viven en `st.session_state`; no se guardan ni se registran.
 
 - Imágenes de hasta 10 MB (se redimensionan a 1024 px).
 - La calidad de detección depende del modelo de visión elegido.
+- La generación de la imagen del plato tarda ~10–30 s (síncrona).

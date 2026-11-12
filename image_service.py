@@ -1,17 +1,10 @@
-"""Imagen del plato con cosmos3-nano (genera video; se extrae un fotograma)."""
+"""Imagen del plato con qwen-image (generación síncrona de imágenes)."""
 from __future__ import annotations
 
-import base64
-import binascii
 import logging
-import os
-import tempfile
-from typing import Any, Callable
-
-import cv2
 
 import config
-import nvidia_client
+import model_studio_client
 import prompts
 from models import ImageResult, Recipe
 
@@ -24,47 +17,18 @@ def build_prompt(recipe: Recipe) -> str:
     return prompts.IMAGE_PROMPT.format(dish=dish)
 
 
-def extract_frame(video_mp4: bytes, position: float = 0.5) -> bytes:
-    """Extrae un fotograma (0..1 de la duración) como PNG."""
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-        tmp.write(video_mp4)
-        path = tmp.name
-    try:
-        cap = cv2.VideoCapture(path)
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total > 1:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int((total - 1) * position))
-        ok, frame = cap.read()
-        cap.release()
-        if not ok:
-            raise nvidia_client.NvidiaAPIError("No se pudo extraer un fotograma del video.")
-        ok, buf = cv2.imencode(".png", frame)
-        if not ok:
-            raise nvidia_client.NvidiaAPIError("No se pudo codificar el fotograma.")
-        return buf.tobytes()
-    finally:
-        os.unlink(path)
-
-
-def generate_dish_media(
+def generate_dish_image(
     recipe: Recipe,
     api_key: str,
-    params: dict[str, Any] | None = None,
-    poll_timeout: int = config.POLL_TIMEOUT_S,
-    on_progress: Callable[[str], None] | None = None,
+    model: str = config.IMAGE_MODEL_ID,
+    size: str = config.IMAGE_SIZE_DEFAULT,
+    prompt_extend: bool = True,
 ) -> ImageResult:
-    """Genera el clip, lo decodifica y extrae el fotograma representativo."""
+    """Genera la imagen del plato y descarga sus bytes (la URL firmada expira)."""
     prompt = build_prompt(recipe)
-    payload = {"model_mode": config.COSMOS_MODEL_MODE, "prompt": prompt,
-               **{**config.COSMOS_DEFAULTS, **(params or {})}}
-    data = nvidia_client.post_json(
-        config.COSMOS_URL, api_key, payload, poll_timeout=poll_timeout, on_progress=on_progress
-    )
-    b64 = data.get("b64_video")
-    if not b64:
-        raise nvidia_client.NvidiaAPIError("La respuesta de Cosmos no incluye 'b64_video'.")
-    try:
-        video = base64.b64decode(b64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise nvidia_client.NvidiaAPIError("El video recibido está corrupto.") from exc
-    return ImageResult(frame_png=extract_frame(video), video_mp4=video, prompt=prompt)
+    url = model_studio_client.generate_image(api_key, model, prompt, size, prompt_extend)
+    logger.info("Imagen generada (%s), descargando bytes…", model)
+    image_bytes = model_studio_client.download_bytes(url)
+    if not image_bytes:
+        raise model_studio_client.ModelStudioError("La imagen generada llegó vacía.")
+    return ImageResult(image_bytes=image_bytes, prompt=prompt)

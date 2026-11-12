@@ -49,6 +49,5 @@ RECIPE_RETRY = (
 
 IMAGE_PROMPT = (
     "Professional food photography of {dish}, plated, natural light, shallow depth "
-    "of field, appetizing, top-down 45 degrees, restaurant menu style, "
-    "slow subtle camera movement"
+    "of field, appetizing, top-down 45 degrees, restaurant menu style"
 )

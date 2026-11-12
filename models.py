@@ -94,6 +94,5 @@ class Recipe:
 
 @dataclass
 class ImageResult:
-    frame_png: bytes
-    video_mp4: bytes
+    image_bytes: bytes
     prompt: str
